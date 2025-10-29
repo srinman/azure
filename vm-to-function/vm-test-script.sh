@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test script to run on the VM to authenticate and call the Function App
-# Uses .default scope for simplified authentication (no app roles needed)
+# Uses .default scope for authentication
 
 # Color codes
 RED='\033[0;31m'
@@ -23,7 +23,7 @@ fi
 # Remove trailing slash if present
 FUNCTION_APP_URL="${FUNCTION_APP_URL%/}"
 
-# Use .default scope for simplified authentication
+# Use .default scope for authentication
 # Both formats work: "api://${APP_ID}/.default" or "${APP_ID}/.default"
 RESOURCE="${APP_ID}/.default"
 
@@ -32,7 +32,7 @@ echo -e "${BLUE}VM to Function App Authentication Test${NC}"
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${YELLOW}Function App URL:${NC} $FUNCTION_APP_URL"
 echo -e "${YELLOW}App ID:${NC} $APP_ID"
-echo -e "${YELLOW}Scope:${NC} $RESOURCE ${GREEN}(.default - no app roles!)${NC}"
+echo -e "${YELLOW}Scope:${NC} $RESOURCE"
 echo
 
 # Step 1: Get access token from Azure IMDS
@@ -113,8 +113,8 @@ elif [ "$HTTP_STATUS" == "401" ]; then
 elif [ "$HTTP_STATUS" == "403" ]; then
     echo -e "${RED}❌ Access forbidden (HTTP 403 Forbidden)${NC}"
     echo -e "${YELLOW}Possible causes:${NC}"
-    echo "  - Managed identity lacks required role assignment"
-    echo "  - Function App app role not assigned"
+    echo "  - Client ID not in allowed list"
+    echo "  - Managed identity not authorized"
 else
     echo -e "${RED}❌ Failed to call Function App (HTTP $HTTP_STATUS)${NC}"
 fi

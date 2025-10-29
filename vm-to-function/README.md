@@ -55,47 +55,26 @@ https://learn.microsoft.com/en-us/security/zero-trust/develop/identity-non-user-
 
 https://learn.microsoft.com/en-us/security/zero-trust/develop/protect-api  
 
-**Simplified Approach:** This guide uses `.default` scope for authentication, which eliminates the need to define and assign app roles. This provides simpler setup while still maintaining strong security through client ID validation in your code.
+**Authentication Approach:** This guide uses `.default` scope for authentication with the App Registration's App ID. This provides simple setup while maintaining strong security through JWT validation and client ID checking in your code.
 
-## Simplified Authentication: Using .default Scope
+## Authentication with .default Scope
 
-Instead of creating app roles and role assignments, you can use the `.default` scope with the App Registration's App ID. This approach:
+This implementation uses the `.default` scope with the App Registration's App ID for managed identity authentication:
 
-✅ **Eliminates** the need to define app roles in the App Registration  
-✅ **Eliminates** the need to assign roles to the managed identity using Microsoft Graph API  
-✅ **Eliminates** the need to enable `appRoleAssignmentRequired`  
-✅ **Simplifies** token requests - just use `<APP_ID>/.default` as the scope  
-✅ **Maintains** strong security through JWT validation and client ID checking in your code  
+✅ **Simple setup** - Create App Registration and request tokens with `<APP_ID>/.default`  
+✅ **JWT validation** - Validates tokens using Azure AD's public keys  
+✅ **Client ID validation** - Only allows specific managed identities  
+✅ **Strong security** - Full control over authentication logic in your code  
 
 ### How it works:
 
-**Traditional approach with app roles:**
 ```bash
-# 1. Define app roles in App Registration
-# 2. Assign roles to managed identity via Graph API
-# 3. Request token with: resource=api://<APP_ID>
-# 4. Token includes 'roles' claim
-# 5. Validate roles claim in code
-```
-
-**Simplified approach with .default:**
-```bash
-# 1. Create App Registration (no roles needed)
+# 1. Create App Registration
 # 2. Request token with: resource=<APP_ID>/.default
-# 3. Token has no 'roles' claim (that's OK!)
-# 4. Validate client_id in your code instead
+# 3. Validate JWT signature, expiration, audience, and client_id in your code
 ```
 
-### Token Request Comparison:
-
-| Approach | Resource/Scope Parameter | Roles Claim in Token | Validation Method |
-|----------|-------------------------|---------------------|-------------------|
-| **App Roles** | `api://<APP_ID>` | ✅ Yes - `"roles": ["Function.Invoke"]` | Check roles claim |
-| **.default Scope** | `<APP_ID>/.default` | ❌ No | Check client_id claim |
-
-Both approaches are secure! The `.default` scope simply moves authorization logic entirely to your application code instead of relying on Entra ID roles.
-
-**📖 For detailed comparison and migration guide, see [SIMPLIFIED-AUTH-GUIDE.md](./SIMPLIFIED-AUTH-GUIDE.md)**
+**Security:** Authorization is enforced in your application code by validating the client ID claim in the JWT token.
 
 ---
 
@@ -664,7 +643,7 @@ if [ -z "$APP_ID" ]; then
     exit 1
 fi
 
-# Use .default scope for simplified authentication (no app roles needed)
+# Use .default scope for simplified authentication
 # Both formats work: "api://${APP_ID}/.default" or "${APP_ID}/.default"
 RESOURCE="${APP_ID}/.default"
 
@@ -673,7 +652,7 @@ echo "VM to Function App Authentication Test"
 echo "=========================================="
 echo "Function App URL: $FUNCTION_APP_URL"
 echo "Resource (App ID): $APP_ID"
-echo "Scope: $RESOURCE (.default scope - no app roles needed!)"
+echo "Scope: $RESOURCE (.default scope)"
 echo
 
 # Step 1: Get access token from Azure IMDS
@@ -890,7 +869,7 @@ You have successfully:
 ✅ Created a Python Function App with storage key-less access  
 ✅ Configured Azure AD App Registration with Application ID URI  
 ✅ Implemented code-based JWT token validation (no Easy Auth needed)  
-✅ Used **`.default` scope for simplified authentication** (no app roles needed!)  
+✅ Used **`.default` scope for authentication** with client ID validation  
 ✅ Validated tokens with signature verification, expiration, and audience checks  
 ✅ Tested authentication from the VM with successful 200 response  
 ✅ Verified unauthorized access is blocked with proper 401/403 responses  
@@ -900,10 +879,10 @@ The VM can now securely call the Function App using its managed identity without
 **Key Features:**
 - 🔒 **No storage keys** - managed identity for all storage access
 - 🔐 **Code-based JWT validation** - full control over token validation logic
-- ✅ **Simplified authentication** - `.default` scope, no app roles configuration
+- ✅ **Simple authentication** - `.default` scope with client ID validation
 - 🎯 **Client ID validation** - only specific VM identity allowed
 - 📊 **Detailed response** - token info, validation status, and caller details
-- 🚀 **Easy setup** - fewer steps, no Graph API calls required
+- 🚀 **Easy setup** - straightforward configuration, clean implementation
 
 ---
 
@@ -916,8 +895,6 @@ The VM can now securely call the Function App using its managed identity without
 - [Microsoft Entra ID - OAuth 2.0 and OpenID Connect Protocols](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc) - Official documentation on token behavior and `.default` scope
 - [Microsoft Entra ID - Application ID URI](https://learn.microsoft.com/en-us/entra/identity-platform/security-best-practices-for-app-registration#application-id-uri) - Best practices for configuring Application ID URIs
 - [Zero Trust Security](https://learn.microsoft.com/en-us/security/zero-trust/develop/identity)
-
-**📖 For detailed comparison of authentication approaches, see [SIMPLIFIED-AUTH-GUIDE.md](./SIMPLIFIED-AUTH-GUIDE.md)**
 
 ---
 

@@ -291,9 +291,9 @@ echo "   App ID: $APP_ID"
 echo "   Token Audience: api://${APP_ID}"
 echo "   VM Managed Identity Client ID: $IDENTITY_CLIENT_ID"
 
-# Step 9: No role assignment needed for this approach
+# Step 9: Authentication configuration complete
 echo -e "\n${BLUE}Step 9: Authentication configuration complete${NC}"
-echo "Note: Using App Registration + code-based validation (no Azure RBAC needed)"
+echo "Note: Using App Registration + code-based validation with client ID checks"
 
 # Summary
 echo -e "\n${BLUE}========================================${NC}"
