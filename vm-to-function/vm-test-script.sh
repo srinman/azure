@@ -1,5 +1,6 @@
 #!/bin/bash
 # Test script to run on the VM to authenticate and call the Function App
+# Uses .default scope for simplified authentication (no app roles needed)
 
 # Color codes
 RED='\033[0;31m'
@@ -8,28 +9,30 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function App URL from command line argument
+# Function App URL and App ID from command line arguments
 FUNCTION_APP_URL="${1}"
+APP_ID="${2}"
 
-if [ -z "$FUNCTION_APP_URL" ]; then
-    echo -e "${RED}Error: Function App URL is required${NC}"
-    echo "Usage: $0 <function-app-url>"
-    echo "Example: $0 https://func-secure-demo-123.azurewebsites.net"
+if [ -z "$FUNCTION_APP_URL" ] || [ -z "$APP_ID" ]; then
+    echo -e "${RED}Error: Both Function App URL and App ID are required${NC}"
+    echo "Usage: $0 <function-app-url> <app-id>"
+    echo "Example: $0 https://func-secure-demo-123.azurewebsites.net aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     exit 1
 fi
 
 # Remove trailing slash if present
 FUNCTION_APP_URL="${FUNCTION_APP_URL%/}"
 
-# Extract hostname for resource URI
-HOSTNAME=$(echo "$FUNCTION_APP_URL" | sed -e 's|^https\?://||' -e 's|/.*||')
-RESOURCE="https://${HOSTNAME}"
+# Use .default scope for simplified authentication
+# Both formats work: "api://${APP_ID}/.default" or "${APP_ID}/.default"
+RESOURCE="${APP_ID}/.default"
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}VM to Function App Authentication Test${NC}"
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${YELLOW}Function App URL:${NC} $FUNCTION_APP_URL"
-echo -e "${YELLOW}Resource URI:${NC} $RESOURCE"
+echo -e "${YELLOW}App ID:${NC} $APP_ID"
+echo -e "${YELLOW}Scope:${NC} $RESOURCE ${GREEN}(.default - no app roles!)${NC}"
 echo
 
 # Step 1: Get access token from Azure IMDS

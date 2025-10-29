@@ -94,7 +94,8 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
     
     # Get configuration from environment
-    allowed_client_id = os.environ.get('ALLOWED_CLIENT_ID', '')
+    allowed_client_id = os.environ.get('ALLOWED_CLIENT_ID', '')  # VM managed identity
+    test_client_id = os.environ.get('TEST_CLIENT_ID', '')  # For testing from laptop
     tenant_id = os.environ.get('TENANT_ID', '')
     app_id = os.environ.get('APP_ID', '')
     
@@ -125,15 +126,28 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     token = auth_header[7:]  # Remove 'Bearer ' prefix
     
     # Validate the JWT token
-    expected_audience = f'api://{app_id}'
-    decoded_token, error = validate_jwt_token(token, tenant_id, expected_audience)
+    # When using .default scope, audience might be the APP_ID directly or api://APP_ID
+    # We need to accept both formats
+    expected_audiences = [f'api://{app_id}', app_id]
     
-    if error:
-        logging.warning(f'Token validation failed: {error}')
+    decoded_token = None
+    validation_error = None
+    
+    # Try validating with each possible audience format
+    for expected_audience in expected_audiences:
+        decoded_token, error = validate_jwt_token(token, tenant_id, expected_audience)
+        if decoded_token:
+            logging.info(f'Token validated with audience: {expected_audience}')
+            break
+        validation_error = error
+    
+    if not decoded_token:
+        logging.warning(f'Token validation failed: {validation_error}')
         return func.HttpResponse(
             json.dumps({
                 "error": "Invalid token",
-                "message": error
+                "message": validation_error,
+                "hint": "Token audience must match APP_ID or api://APP_ID"
             }),
             status_code=401,
             mimetype="application/json"
@@ -152,16 +166,23 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     
     logging.info(f'Authenticated identity: appid={caller_appid}, azp={caller_azp}, oid={caller_oid}')
     
-    # Validate against allowed client ID
-    if allowed_client_id and caller_client_id != allowed_client_id:
-        logging.warning(f'Unauthorized caller: {caller_client_id}, expected: {allowed_client_id}')
+    # Build list of allowed client IDs
+    allowed_ids = []
+    if allowed_client_id:
+        allowed_ids.append(allowed_client_id.strip())
+    if test_client_id:
+        allowed_ids.append(test_client_id.strip())
+    
+    # Validate against allowed client IDs
+    if allowed_ids and caller_client_id not in allowed_ids:
+        logging.warning(f'Unauthorized caller: {caller_client_id}, expected one of: {allowed_ids}')
         return func.HttpResponse(
             json.dumps({
                 "error": "Forbidden",
                 "message": f"Client ID {caller_client_id} is not authorized to call this function",
                 "debug_info": {
                     "caller_client_id": caller_client_id,
-                    "allowed_client_id": allowed_client_id,
+                    "allowed_client_ids": allowed_ids,
                     "token_claims": {
                         "appid": caller_appid,
                         "azp": caller_azp,
@@ -176,6 +197,17 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     
     logging.info(f'Authorized request from: {caller_client_id}')
     
+    # Determine caller type
+    caller_type = "unknown"
+    if caller_client_id == allowed_client_id:
+        caller_type = "VM managed identity"
+    elif caller_client_id == test_client_id:
+        caller_type = "Test service principal"
+    elif caller_appid:
+        caller_type = "Service principal"
+    elif caller_oid:
+        caller_type = "User"
+    
     # Prepare success response
     response_data = {
         "message": "Successfully authenticated!",
@@ -183,6 +215,7 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "caller_info": {
             "client_id": caller_client_id,
+            "caller_type": caller_type,
             "object_id": caller_oid,
             "subject": caller_sub,
             "appid_claim": caller_appid,
@@ -195,8 +228,10 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
             "expires_at": datetime.fromtimestamp(decoded_token.get('exp', 0)).isoformat() if decoded_token.get('exp') else None
         },
         "validation": {
-            "allowed_client_id": allowed_client_id,
-            "client_id_match": caller_client_id == allowed_client_id,
+            "allowed_vm_client_id": allowed_client_id,
+            "allowed_test_client_id": test_client_id,
+            "all_allowed_ids": allowed_ids,
+            "client_id_match": caller_client_id in allowed_ids if allowed_ids else True,
             "claim_used": "appid" if caller_appid else ("azp" if caller_azp else "oid"),
             "method": "code-based-jwt-validation"
         }
