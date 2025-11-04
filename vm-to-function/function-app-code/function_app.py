@@ -127,8 +127,12 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     
     # Validate the JWT token
     # When using .default scope, audience might be the APP_ID directly or api://APP_ID
-    # We need to accept both formats
-    expected_audiences = [f'api://{app_id}', app_id]
+    # We need to accept both formats, and also with /.default suffix
+    expected_audiences = [
+        f'api://{app_id}',
+        app_id,
+        f'{app_id}/.default'
+    ]
     
     decoded_token = None
     validation_error = None
@@ -143,10 +147,21 @@ def HttpTrigger(req: func.HttpRequest) -> func.HttpResponse:
     
     if not decoded_token:
         logging.warning(f'Token validation failed: {validation_error}')
+        
+        # Try to extract audience from token without validation for debugging
+        received_audience = None
+        try:
+            unverified_payload = jwt.decode(token, options={"verify_signature": False})
+            received_audience = unverified_payload.get('aud')
+        except:
+            received_audience = "Unable to decode token"
+        
         return func.HttpResponse(
             json.dumps({
                 "error": "Invalid token",
                 "message": validation_error,
+                "received_audience": received_audience,
+                "expected_audiences": expected_audiences,
                 "hint": "Token audience must match APP_ID or api://APP_ID"
             }),
             status_code=401,

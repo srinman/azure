@@ -12,4 +12,35 @@
 | Policy | https://www.azadvertizer.net/index.html |
 | VM to Function App auth | [Sample demo](https://github.com/srinman/azure/blob/master/vm-to-function/README.md) |
 
+## 🔒 Security & Best Practices
+
+This repository contains multiple Azure demo projects. To protect sensitive information:
+
+- ✅ **`.gitignore` configured** - Blocks secrets, credentials, and sensitive files across all subfolders
+- ✅ **Template files tracked** - Configuration files with placeholder values are safe to commit
+- ✅ **Local overrides ignored** - Use `*.local.*` or `.env.local` for real secrets (automatically ignored)
+
+### Working with Secrets
+
+**DO NOT commit:**
+- Service principal secrets or passwords
+- Connection strings with real credentials
+- Azure subscription IDs or tenant IDs in plain text
+- SSH private keys
+- Certificates (.pfx, .cer, .crt)
+- Any `.env` or `.env.*` files (except `.env.example`)
+
+**Safe to commit:**
+- Template files with placeholders (e.g., `local.settings.json` with empty values)
+- Example files (`.env.example`, `*.example.*`, `*.template.*`)
+- Documentation and README files
+- Scripts that use environment variables (not hardcoded secrets)
+
+### Recommended Practice
+
+When working on a demo:
+1. Use environment variables for all sensitive values
+2. Create a `.env.example` file showing required variables (without real values)
+3. Document in the demo's README what secrets are needed
+4. Use Azure Key Vault or Managed Identities in production scenarios
 

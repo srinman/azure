@@ -642,14 +642,14 @@ Azure Bastion provides secure SSH access without exposing the VM with a public I
 
 ### Bastion via Azure
 
-Use Azure Portal (Easiest for Developer SKU)
-Go to: https://portal.azure.com
-Navigate to your VM: vm-ubuntu-demo
-Click Connect → Connect via Bastion
-Username: azureuser
-Authentication: SSH Private Key from Local File
-Select your key: ~/.ssh/id_rsa
-Click Connect
+Use Azure Portal (Easiest for Developer SKU)  
+Go to: https://portal.azure.com    
+Navigate to your VM: vm-ubuntu-demo  
+Click Connect → Connect via Bastion   
+Username: azureuser  
+Authentication: SSH Private Key from Local File  
+Select your key: ~/.ssh/id_rsa  
+Click Connect  
 
 ---
 
@@ -670,7 +670,7 @@ curl -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=2021
 
 ## Step 12: Create Test Script on VM
 
-On the VM, create a script to get a token and call the Function App.
+On the VM, create a script to get a token and call the Function App.  Easty way is to git clone the repo for the script.  Read instructions.  
 
 **Important:** You'll need the App ID from Step 8. Get it first:
 
@@ -695,6 +695,7 @@ az network bastion ssh \
   --ssh-key ~/.ssh/id_rsa
 
 # On the VM, create the test script
+# copy and paste to bastion had some issues.  use git clone and clone this repo for call-function.sh script
 cat > call-function.sh << 'EOF'
 #!/bin/bash
 
@@ -797,7 +798,7 @@ echo "✅ Test script created: call-function.sh"
 First, you need the App ID from your local machine:
 
 ```bash
-# On your LOCAL machine, get the App ID
+# On your LOCAL machine, run these commands.  Last echo command helps you to get the command you need for VM.   
 APP_ID=$(az ad app list --display-name "${FUNCTION_APP_NAME}-app" --query "[0].appId" -o tsv)
 echo "App ID (Function App API Resource): $APP_ID"
 echo ""
@@ -808,7 +809,7 @@ echo "./call-function.sh \"https://${FUNCTION_APP_NAME}.azurewebsites.net\" \"$A
 Then, connect to the VM via Bastion and run the test:
 
 ```bash
-# Run the test script with Function App URL and App ID
+# Run the test script with Function App URL and App ID  - get the output from the last echo command which should have populated all required fields  
 ./call-function.sh "https://<your-function-app>.azurewebsites.net" "<app-id-from-above>"
 
 # Example:
@@ -861,6 +862,61 @@ Response Body:
 ✅ Successfully authenticated and called Function App!
 ==========================================
 ```
+
+---
+
+## Step 13.1: Demonstrate Token Acquisition (Security Insight)
+
+**Important Security Note:** This step demonstrates that **any identity in Entra ID can request a token** for your App Registration. The security is enforced by your **Function App's validation logic**, not by Entra ID token issuance.
+
+### Get Token with Test Service Principal (From Laptop)
+
+If you created a test service principal in Step 8e:
+
+```bash
+# Get token using service principal credentials
+TEST_TOKEN=$(curl -s -X POST \
+  "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=${TEST_APP_ID}" \
+  -d "client_secret=${TEST_CLIENT_SECRET}" \
+  -d "scope=${APP_ID}/.default" \
+  -d "grant_type=client_credentials" | jq -r '.access_token')
+
+echo "Test SP Token obtained: ${TEST_TOKEN:0:50}..."
+
+# Call Function App with test service principal token
+curl -H "Authorization: Bearer $TEST_TOKEN" \
+  "https://${FUNCTION_APP_NAME}.azurewebsites.net/api/HttpTrigger" | jq
+```
+
+**Expected Result: HTTP 200 Success** (if TEST_CLIENT_ID is configured)
+```json
+{
+  "message": "Successfully authenticated!",
+  "caller_info": {
+    "caller_type": "Test service principal",
+    "client_id": "<test-sp-client-id>"
+  }
+}
+```
+
+### Key Takeaway 🔑
+
+**Token Acquisition ≠ Authorization**
+
+1. ✅ **Anyone in your Entra ID tenant** can request a token for `APP_ID/.default`
+2. ✅ **Entra ID will issue the token** to any authenticated identity (user, managed identity, service principal)
+3. 🔒 **Your Function App enforces authorization** by validating the client ID in the token
+4. ❌ **Unauthorized identities are rejected** even though they have a valid token
+
+**This demonstrates:**
+- Azure App Registrations are **not protected by default** - any identity can get tokens
+- **Application-level validation is critical** for security
+- **Client ID validation** in your code is what prevents unauthorized access
+- This is why **app roles or client ID validation** is necessary for API protection
+
+---
 
 ### Test Unauthorized Access (from local machine):
 
