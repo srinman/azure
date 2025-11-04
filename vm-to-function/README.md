@@ -2,13 +2,20 @@
 
 This guide demonstrates how to deploy a Linux Ubuntu VM with a user-assigned managed identity that authenticates to an Azure Function App running Python code, with the Function App configured to accept calls only from that specific managed identity.
 
-**🔒 Security Note:** This implementation uses **managed identities for storage access** (no storage keys), following best practices for organizations that disable shared key access on storage accounts.
+**🔒 Security Note:** This implementation uses **managed identities for storage access** (no storage keys) and **Azure Bastion for secure VM access** (no public IPs), following best practices for organizations that require secure infrastructure.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Linux Ubuntu VM (D2s_v3)                      │
+│  Azure Bastion (Developer SKU) 🔒              │
+│  - Secure SSH/RDP without public IPs           │
+│  - Cost-effective for dev/test scenarios       │
+└─────────────────────────────────────────────────┘
+                    │ SSH Tunnel
+                    ▼
+┌─────────────────────────────────────────────────┐
+│  Linux Ubuntu VM (D2s_v3) - NO PUBLIC IP 🔒   │
 │  ┌────────────────────────────────────┐        │
 │  │  User-Assigned Managed Identity     │        │
 │  │  (id-vm-to-function)                │        │
@@ -106,6 +113,7 @@ STORAGE_ACCOUNT_NAME="stfunc$(date +%s | tail -c 8)"  # Must be globally unique
 VNET_NAME="vnet-demo"
 SUBNET_NAME="subnet-vm"
 NSG_NAME="nsg-vm"
+BASTION_NAME="bastion-demo"
 
 # Display the values
 echo "Resource Group: $RESOURCE_GROUP"
@@ -113,6 +121,7 @@ echo "VM Managed Identity: $MANAGED_IDENTITY_NAME"
 echo "Function Storage Identity: $FUNC_STORAGE_IDENTITY_NAME"
 echo "Function App: $FUNCTION_APP_NAME"
 echo "Storage Account: $STORAGE_ACCOUNT_NAME"
+echo "Bastion Host: $BASTION_NAME"
 ```
 
 ---
@@ -163,10 +172,10 @@ echo "   Principal ID: $IDENTITY_PRINCIPAL_ID"
 
 ---
 
-## Step 4: Create Virtual Network and Subnet
+## Step 4: Create Virtual Network with Subnets
 
 ```bash
-# Create virtual network
+# Create virtual network with VM subnet
 az network vnet create \
   --name $VNET_NAME \
   --resource-group $RESOURCE_GROUP \
@@ -175,24 +184,20 @@ az network vnet create \
   --subnet-name $SUBNET_NAME \
   --subnet-prefix 10.0.1.0/24
 
-# Create Network Security Group
+# Create Azure Bastion subnet (required name and minimum /26 prefix)
+az network vnet subnet create \
+  --name AzureBastionSubnet \
+  --vnet-name $VNET_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --address-prefix 10.0.2.0/26
+
+# Create Network Security Group for VM subnet
 az network nsg create \
   --name $NSG_NAME \
   --resource-group $RESOURCE_GROUP \
   --location $LOCATION
 
-# Allow SSH (you can restrict this to your IP)
-az network nsg rule create \
-  --name AllowSSH \
-  --nsg-name $NSG_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --priority 1000 \
-  --source-address-prefixes '*' \
-  --destination-port-ranges 22 \
-  --protocol Tcp \
-  --access Allow
-
-# Allow outbound HTTPS (for accessing Function App)
+# Allow outbound HTTPS (for accessing Function App and Azure services)
 az network nsg rule create \
   --name AllowHTTPS \
   --nsg-name $NSG_NAME \
@@ -204,22 +209,53 @@ az network nsg rule create \
   --protocol Tcp \
   --access Allow
 
-# Associate NSG with subnet
+# Associate NSG with VM subnet
 az network vnet subnet update \
   --name $SUBNET_NAME \
   --vnet-name $VNET_NAME \
   --resource-group $RESOURCE_GROUP \
   --network-security-group $NSG_NAME
 
-echo "✅ Virtual network and NSG created"
+echo "✅ Virtual network and subnets created"
 ```
 
 ---
 
-## Step 5: Create Ubuntu VM with Managed Identity
+## Step 5: Create Azure Bastion (Developer SKU)
+
+**Note:** Azure Bastion Developer SKU is the most cost-effective option for development/testing. It allows secure RDP/SSH access without public IPs.
 
 ```bash
-# Create the VM with user-assigned managed identity
+# Create Bastion host with Developer SKU (cheapest option)
+BASTION_NAME="bastion-demo"
+
+az network bastion create \
+  --name $BASTION_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --vnet-name $VNET_NAME \
+  --location $LOCATION \
+  --sku Developer \
+  --enable-tunneling true
+
+echo "✅ Azure Bastion created (Developer SKU)"
+echo "   Name: $BASTION_NAME"
+echo "   SKU: Developer (most cost-effective)"
+echo "   Tunneling: Enabled (for SSH access)"
+```
+
+**Developer SKU Features:**
+- ✅ **Lowest cost** - Significantly cheaper than Basic/Standard SKUs
+- ✅ **SSH tunneling** - Connect via Azure CLI
+- ✅ **No public IPs needed** - VMs stay completely private
+- ⚠️ **Limitation** - Only supports 2 concurrent connections
+- ⚠️ **Best for** - Development, testing, and demo scenarios
+
+---
+
+## Step 6: Create Ubuntu VM without Public IP
+
+```bash
+# Create the VM with user-assigned managed identity (NO public IP)
 az vm create \
   --name $VM_NAME \
   --resource-group $RESOURCE_GROUP \
@@ -232,19 +268,12 @@ az vm create \
   --subnet $SUBNET_NAME \
   --nsg $NSG_NAME \
   --assign-identity $IDENTITY_ID \
-  --public-ip-sku Standard
+  --public-ip-address ""
 
-# Get the VM's public IP
-VM_PUBLIC_IP=$(az vm show \
-  --name $VM_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --show-details \
-  --query publicIps -o tsv)
-
-echo "✅ VM Created"
+echo "✅ VM Created (without public IP)"
 echo "   VM Name: $VM_NAME"
-echo "   Public IP: $VM_PUBLIC_IP"
-echo "   SSH Command: ssh azureuser@$VM_PUBLIC_IP"
+echo "   Access: Via Azure Bastion only"
+echo "   Private IP: Use 'az vm show' to get private IP if needed"
 ```
 
 ---
@@ -310,6 +339,8 @@ az role assignment create \
 echo "✅ Storage role assigned to managed identity"
 
 # Step 7d: Create Function App using Flex Consumption plan with managed identity
+#          UAMI used here is for authenticating with storage account.  It is not used for any other purposes.  
+#          Rest of the Step 7 are all for the same reason. To force Function app to use UAMI for storage access
 az functionapp create \
   --resource-group $RESOURCE_GROUP \
   --flexconsumption-location $LOCATION \
@@ -352,6 +383,7 @@ echo "   Storage Access: Managed Identity (no keys)"
 
 ```bash
 # Step 8a: Create Azure AD App Registration for the Function App API (Resource)
+#          It's important to note that Function App is unaware of this App reg and service principal.  
 echo "Creating Azure AD App Registration for Function App API..."
 
 # Get tenant ID
@@ -366,11 +398,18 @@ APP_ID=$(az ad app create \
 
 echo "✅ App Registration created (Function App API Resource)"
 echo "   App ID: $APP_ID"
+echo $APP_REG_NAME 
+```
+State of objects in EntraID before spn creation 
+![alt text](image-2.png)
+![alt text](image-3.png)
 
+```bash
 # Step 8b: Set the Application ID URI (required for managed identity token requests)
 az ad app update --id $APP_ID --identifier-uris "api://${APP_ID}"
 
 echo "✅ Application ID URI set: api://${APP_ID}"
+
 
 # Note: With .default scope, you can use either:
 # - api://{APP_ID}/.default (standard format)
@@ -395,13 +434,21 @@ echo "✅ Application ID URI set: api://${APP_ID}"
 # When using Azure CLI, you must explicitly create it with 'az ad sp create'.
 # This is required for token requests to work - Entra ID needs the Service Principal
 # to recognize api://{APP_ID} as a valid resource in your tenant.
+# APP_ID is the application id of the app we just created 
 SP_ID=$(az ad sp create --id $APP_ID --query id -o tsv)
 
 echo "✅ Service Principal created (for Function App API Resource)"
 echo "   Service Principal Object ID: $SP_ID"
 echo "   Note: This SP represents the API resource, NOT the VM identity"
+```
+![alt text](image-6.png)  
+![alt text](image-4.png)
 
+```bash
 # Step 8d: Set environment variables for code-based JWT validation
+#          Let's pass APP_ID of app reg we created and ClientID of VM's managed identity to Function App
+#          Again,  Azure Function App resource has not been defined with APP_ID,   APP_ID is passed to the python program to let it validate audience claim - code snippet below 
+#               expected_audiences = [f'api://{app_id}', app_id]
 az functionapp config appsettings set \
   --name $FUNCTION_APP_NAME \
   --resource-group $RESOURCE_GROUP \
@@ -416,19 +463,17 @@ echo "   APP_ID (API Resource): $APP_ID"
 echo "   ALLOWED_CLIENT_ID (VM Identity): $IDENTITY_CLIENT_ID"
 ```
 
-**Note:** Easy Auth is not used or configured in this setup.
 
-**Why Code-Based Validation (No Easy Auth)?**
-- ✅ **Full control** over authentication logic
-- ✅ **Better debugging** - see exactly why tokens fail
-- ✅ **Detailed error messages** - expired, wrong audience, invalid signature, etc.
+**Important notes**
+- ✅ **Full control** over authorization logic
 - ✅ **Flexible validation** - can validate any claims you want
 - ✅ **No platform dependencies** - pure Python code - security is intact when moved to a different hosting platform
-- ✅ **Better logging** - see what's happening at each step
 
 ---
 
 ## Step 8e (OPTIONAL): Create Test Service Principal for Local Testing
+
+THIS STEP (8a) CAN BE SKIPPED IF VM IS USED FOR VALIDATION (or for calling Function App)   
 
 If you want to test the Function App from your laptop without VM setup, create a dedicated test service principal. **You'll use this after deploying the function code in Step 9.**
 
@@ -517,6 +562,7 @@ cryptography>=41.0.0
 
 ### 9.4: Deploy Function to Azure
 
+current working directory should be vm-to-function    
 ```bash
 # Deploy the function
 cd function-app-code
@@ -524,7 +570,7 @@ func azure functionapp publish $FUNCTION_APP_NAME
 
 echo "✅ Function deployed successfully"
 echo "   Function URL: ${FUNCTION_APP_URL}/api/HttpTrigger"
-echo "   Authentication: Code-based JWT validation (no Easy Auth)"
+echo "   Authentication: Code-based JWT validation"
 ```
 
 ### 9.5: Test Unauthorized Access from Local Machine
@@ -590,14 +636,28 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" \
 
 ---
 
-## Step 10: Install Required Tools on the VM
+## Step 10: Connect to VM via Azure Bastion
 
-SSH into the VM and install necessary tools:
+Azure Bastion provides secure SSH access without exposing the VM with a public IP.
+
+### Bastion via Azure
+
+Use Azure Portal (Easiest for Developer SKU)
+Go to: https://portal.azure.com
+Navigate to your VM: vm-ubuntu-demo
+Click Connect → Connect via Bastion
+Username: azureuser
+Authentication: SSH Private Key from Local File
+Select your key: ~/.ssh/id_rsa
+Click Connect
+
+---
+
+## Step 11: Install Required Tools on the VM
+
+Once connected to the VM via Bastion, install necessary tools:
 
 ```bash
-# SSH into the VM
-ssh azureuser@$VM_PUBLIC_IP
-
 # Once connected, run these commands:
 sudo apt-get update
 sudo apt-get install -y curl jq
@@ -608,7 +668,7 @@ curl -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=2021
 
 ---
 
-## Step 11: Create Test Script on VM
+## Step 12: Create Test Script on VM
 
 On the VM, create a script to get a token and call the Function App.
 
@@ -621,11 +681,18 @@ echo "App ID (Function App API Resource): $APP_ID"
 echo "Use this App ID in the VM script below"
 ```
 
-Now, SSH to the VM and create the test script:
+Now, connect to the VM via Bastion and create the test script:
 
 ```bash
-# SSH into the VM
-ssh azureuser@$VM_PUBLIC_IP
+# Connect to the VM via Bastion (use one of the methods from Step 10)
+# For example, using direct SSH:
+az network bastion ssh \
+  --name $BASTION_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --target-resource-id $(az vm show --name $VM_NAME --resource-group $RESOURCE_GROUP --query id -o tsv) \
+  --auth-type ssh-key \
+  --username azureuser \
+  --ssh-key ~/.ssh/id_rsa
 
 # On the VM, create the test script
 cat > call-function.sh << 'EOF'
@@ -723,7 +790,7 @@ echo "✅ Test script created: call-function.sh"
 
 ---
 
-## Step 12: Test the Authentication
+## Step 13: Test the Authentication
 
 ### From the VM:
 
@@ -738,7 +805,7 @@ echo "Run this command on the VM:"
 echo "./call-function.sh \"https://${FUNCTION_APP_NAME}.azurewebsites.net\" \"$APP_ID\""
 ```
 
-Then, on the VM:
+Then, connect to the VM via Bastion and run the test:
 
 ```bash
 # Run the test script with Function App URL and App ID
@@ -806,7 +873,7 @@ curl -i "https://${FUNCTION_APP_NAME}.azurewebsites.net/api/HttpTrigger"
 
 ---
 
-## Step 13: Verify Security Configuration
+## Step 14: Verify Security Configuration
 
 ### Check Function App Authentication Settings:
 
@@ -837,9 +904,11 @@ echo "✅ Cleanup initiated. Resources will be deleted in the background."
 ## Security Best Practices
 
 1. **Network Security**
+   - ✅ **No public IPs** - VMs use Azure Bastion for secure access (implemented in this guide)
+   - ✅ **Azure Bastion Developer SKU** - Cost-effective secure access for dev/test scenarios
    - Use private endpoints for Function App if possible
-   - Restrict VM NSG to only necessary ports
-   - Use Azure Bastion instead of public IP for VM access
+   - Restrict VM NSG to only necessary outbound ports
+   - Consider network isolation with private VNets
 
 2. **Identity Management**
    - Use user-assigned managed identities for better control
@@ -865,7 +934,8 @@ echo "✅ Cleanup initiated. Resources will be deleted in the background."
 You have successfully:
 
 ✅ Created a user-assigned managed identity  
-✅ Deployed a Linux Ubuntu VM (D2s_v3) with the managed identity  
+✅ Deployed a Linux Ubuntu VM (D2s_v3) **without public IP** (secure!)  
+✅ Configured **Azure Bastion Developer SKU** for cost-effective secure access  
 ✅ Created a Python Function App with storage key-less access  
 ✅ Configured Azure AD App Registration with Application ID URI  
 ✅ Implemented code-based JWT token validation (no Easy Auth needed)  
@@ -878,17 +948,21 @@ The VM can now securely call the Function App using its managed identity without
 
 **Key Features:**
 - 🔒 **No storage keys** - managed identity for all storage access
+- 🔒 **No public IPs** - VM accessed securely via Azure Bastion Developer SKU
 - 🔐 **Code-based JWT validation** - full control over token validation logic
 - ✅ **Simple authentication** - `.default` scope with client ID validation
 - 🎯 **Client ID validation** - only specific VM identity allowed
 - 📊 **Detailed response** - token info, validation status, and caller details
 - 🚀 **Easy setup** - straightforward configuration, clean implementation
+- 💰 **Cost-effective** - Bastion Developer SKU is the cheapest option for dev/test
 
 ---
 
 ## Additional Resources
 
 - [Azure Managed Identities Documentation](https://docs.microsoft.com/en-us/azure/active-identity/managed-identities-azure-resources/)
+- [Azure Bastion Documentation](https://learn.microsoft.com/en-us/azure/bastion/bastion-overview) - Secure RDP/SSH without public IPs
+- [Azure Bastion Developer SKU](https://learn.microsoft.com/en-us/azure/bastion/quickstart-developer-sku) - Most cost-effective option
 - [Azure Functions Authentication](https://docs.microsoft.com/en-us/azure/app-service/overview-authentication-authorization)
 - [Azure Instance Metadata Service](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/instance-metadata-service)
 - [Microsoft Identity Platform Documentation](https://docs.microsoft.com/en-us/azure/active-directory/develop/)
