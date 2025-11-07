@@ -63,6 +63,10 @@ id_rsa*
 **/.coverage
 **/.hypothesis/
 
+# Flask session data
+**/flask_session/
+**/.webassets-cache/
+
 # Node.js Functions
 **/node_modules/
 **/package-lock.json

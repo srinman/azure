@@ -1,0 +1,12 @@
+{
+  "oauth2PermissionScopes": [{
+    "adminConsentDescription": "Allows the web app to access the API on behalf of the signed-in user",
+    "adminConsentDisplayName": "Access API as user",
+    "id": "d89611ae-288c-4055-8657-7049a2bd449e",
+    "isEnabled": true,
+    "type": "User",
+    "userConsentDescription": "Allows the web app to access the API on your behalf",
+    "userConsentDisplayName": "Access API",
+    "value": "access_as_user"
+  }]
+}

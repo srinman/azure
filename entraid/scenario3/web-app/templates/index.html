@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web App Calls API</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 30px; border-radius: 8px; }
+        h1 { color: #0078d4; }
+        .user-info { background: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        button, a.button { background: #0078d4; color: white; padding: 12px 24px; border: none;
+                          border-radius: 4px; cursor: pointer; text-decoration: none;
+                          display: inline-block; margin: 5px; }
+        button:hover, a.button:hover { background: #005a9e; }
+        .logout-btn { background: #d13438; }
+        .logout-btn:hover { background: #a52834; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Web App that Calls API</h1>
+        
+        {% if user %}
+            <div class="user-info">
+                <h2>✅ Signed In</h2>
+                <p><strong>Name:</strong> {{ user.name }}</p>
+                <p><strong>Email:</strong> {{ user.preferred_username }}</p>
+            </div>
+            
+            <div>
+                <a href="{{ url_for('call_api') }}" class="button">📞 Call Protected API</a>
+                <a href="{{ url_for('logout') }}" class="button logout-btn">🚪 Sign Out</a>
+            </div>
+        {% else %}
+            <p>Sign in to call the protected API.</p>
+            <a href="{{ url_for('login') }}" class="button">🔑 Sign In</a>
+        {% endif %}
+        
+        <hr style="margin: 30px 0;">
+        <p style="font-size: 14px; color: #666;">
+            <strong>Scenario:</strong> Web app that calls a protected API<br>
+            <strong>MSAL Version:</strong> {{ version }}
+        </p>
+    </div>
+</body>
+</html>
