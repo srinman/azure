@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1130" viewBox="0 0 1440 1130" role="img" aria-labelledby="title description">
+  <title id="title">Alteryx to APIM to Foundry: private network flows and authentication</title>
+  <desc id="description">Corporate Alteryx Designer or Server sends HTTPS requests over ExpressRoute private peering or VPN to the private endpoint of shared APIM srinmanwest. APIM validates a gateway-only bearer API key. APIM replaces this credential with an Entra token for its dedicated user-assigned managed identity and sends the request through outbound VNet integration to the Foundry account private endpoint. Foundry requires Cognitive Services OpenAI User at the model-hosting resource. Private DNS resolves normal service hostnames to private endpoint IPs. Separate control-plane dependencies include Alteryx One, Entra ID, and Azure platform services; the inference private endpoints do not make these dependencies private. The diagram assumes Alteryx support has confirmed direct private model requests from the corporate runtime.</desc>
+  <defs>
+    <style>
+      .title { font: 700 27px "Segoe UI", Roboto, Arial, sans-serif; fill: #0f172a; }
+      .heading { font: 700 19px "Segoe UI", Roboto, Arial, sans-serif; fill: #0f172a; }
+      .label { font: 700 16px "Segoe UI", Roboto, Arial, sans-serif; fill: #0f172a; }
+      .text { font: 15px "Segoe UI", Roboto, Arial, sans-serif; fill: #334155; }
+      .small { font: 13px "Segoe UI", Roboto, Arial, sans-serif; fill: #475569; }
+      .mono { font: 13px "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace; fill: #0f172a; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .purple { fill: #7e22ce; }
+      .white { fill: #fff; }
+      .flow1 { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#blue-arrow); }
+      .flow2 { stroke: #059669; stroke-width: 3; fill: none; marker-end: url(#green-arrow); }
+      .dns { stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 7 5; fill: none; marker-end: url(#gray-arrow); }
+      .control { stroke: #9333ea; stroke-width: 2.5; stroke-dasharray: 3 5; fill: none; marker-end: url(#purple-arrow); }
+    </style>
+    <marker id="blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+    <marker id="green-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#059669"/></marker>
+    <marker id="gray-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+    <marker id="purple-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#9333ea"/></marker>
+  </defs>
+
+  <rect width="1440" height="1130" fill="#fff"/>
+  <text class="title" x="28" y="39">Alteryx -> shared APIM -> Foundry</text>
+  <text class="text" x="28" y="66">Private inference path. Two authentication legs. No Foundry key or backend role is given to Alteryx.</text>
+
+  <rect x="24" y="85" width="1392" height="49" rx="8" fill="#fffbeb" stroke="#d97706"/>
+  <text class="label" x="40" y="106">Prerequisite: confirm that the installed Alteryx connector originates model requests from the corporate runtime.</text>
+  <text class="small" x="40" y="125">An Alteryx One relay is not shown or assumed private. A desktop VPN does not give a cloud relay access to this network.</text>
+
+  <rect x="24" y="154" width="298" height="345" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text class="heading" x="42" y="183">Corporate network</text>
+  <text class="small" x="42" y="207">Designer + every Server worker</text>
+
+  <rect x="365" y="154" width="1051" height="345" rx="10" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5"/>
+  <text class="heading" x="385" y="183">Azure: private endpoints and VNet-connected managed services</text>
+  <text class="small" x="385" y="207">Primary pattern: Standard v2 / Premium v2 outbound integration + inbound Private Link</text>
+
+  <rect x="43" y="237" width="565" height="28" rx="7" fill="#dbeafe"/>
+  <text class="label blue" x="57" y="257">LEG 1: HTTPS + gateway-only bearer API key</text>
+  <rect x="625" y="237" width="766" height="28" rx="7" fill="#d1fae5"/>
+  <text class="label green" x="639" y="257">LEG 2: HTTPS + dedicated managed identity token</text>
+
+  <rect x="43" y="282" width="224" height="139" rx="9" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+  <text class="label" x="59" y="309">Alteryx runtime</text>
+  <text class="text" x="59" y="335">Prompt / LLM Override</text>
+  <text class="small" x="59" y="359">OpenAI-compatible connection</text>
+  <text class="small" x="59" y="382">Secret stored in connection</text>
+  <text class="small" x="59" y="405">No backend credentials</text>
+
+  <path class="flow1" d="M267 350 H390"/>
+  <text class="small blue" x="277" y="312">Private peering</text>
+  <text class="small blue" x="284" y="329">or VPN</text>
+  <text class="small blue" x="290" y="374">TCP 443</text>
+
+  <rect x="393" y="282" width="148" height="139" rx="9" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+  <text class="label" x="408" y="309">APIM private</text>
+  <text class="label" x="408" y="331">endpoint</text>
+  <text class="small" x="408" y="359">Subresource:</text>
+  <text class="mono" x="408" y="380">Gateway</text>
+  <text class="small" x="408" y="405">Private IP</text>
+
+  <path class="flow1" d="M541 350 H589"/>
+
+  <rect x="592" y="282" width="314" height="139" rx="9" fill="#fff" stroke="#0f766e" stroke-width="2"/>
+  <text class="label" x="608" y="309">Shared APIM: srinmanwest</text>
+  <text class="small" x="608" y="335">1. Require private ingress + valid key</text>
+  <text class="small" x="608" y="357">2. Remove caller credentials</text>
+  <text class="small" x="608" y="379">3. Acquire UAMI token; set Authorization</text>
+  <text class="small" x="608" y="405">Fixed backend; outbound VNet integration</text>
+
+  <path class="flow2" d="M906 350 H956"/>
+  <text class="small green" x="920" y="333">443</text>
+
+  <rect x="959" y="282" width="148" height="139" rx="9" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text class="label" x="974" y="309">Foundry private</text>
+  <text class="label" x="974" y="331">endpoint</text>
+  <text class="small" x="974" y="359">Subresource:</text>
+  <text class="mono" x="974" y="380">account</text>
+  <text class="small" x="974" y="405">Private IP</text>
+
+  <path class="flow2" d="M1107 350 H1155"/>
+
+  <rect x="1158" y="282" width="232" height="139" rx="9" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text class="label" x="1174" y="309">Foundry model resource</text>
+  <text class="small" x="1174" y="335">Validate Entra token + RBAC</text>
+  <text class="mono" x="1174" y="359">/openai/v1/</text>
+  <text class="mono" x="1174" y="380">chat/completions</text>
+  <text class="small" x="1174" y="405">Deployment: alteryx-chat</text>
+
+  <text class="small" x="43" y="448">Responses return on the same</text>
+  <text class="small" x="43" y="469">private HTTPS connections.</text>
+  <text class="small" x="385" y="448">APIM outbound subnet -> same/peered VNet -> Foundry endpoint subnet. Private endpoints use nondelegated subnets.</text>
+  <text class="small" x="385" y="469">Foundry public access: disabled. APIM: disable public access, or approve the documented per-API private-ingress exception.</text>
+  <text class="small" x="385" y="488">This is a logical connectivity view: outbound integration does not deploy the APIM gateway into the endpoint subnet.</text>
+
+  <rect x="24" y="522" width="682" height="197" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+  <text class="heading blue" x="43" y="551">1. Alteryx authenticates to APIM</text>
+  <text class="mono" x="43" y="580">Authorization: Bearer &lt;gateway-only-key&gt;</text>
+  <text class="text" x="43" y="609">APIM policy checks the secret and private-endpoint request context.</text>
+  <text class="text" x="43" y="634">Credential scope: this Alteryx connection/workload, not a user identity.</text>
+  <text class="text" x="43" y="659">No Entra client registration or Foundry role is required for this leg.</text>
+  <text class="small" x="43" y="689">Base URL: https://srinmanwest.azure-api.net/alteryx-llm/v1</text>
+  <text class="small" x="43" y="709">Gateway key is discarded at APIM; it is never sent to the model resource.</text>
+
+  <rect x="724" y="522" width="692" height="197" rx="10" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text class="heading green" x="743" y="551">2. APIM authenticates to Foundry</text>
+  <text class="mono" x="743" y="580">Authorization: Bearer &lt;short-lived-Entra-token&gt;</text>
+  <text class="text" x="743" y="609">UAMI: alteryx-foundry-gateway, attached to the shared APIM.</text>
+  <text class="text" x="743" y="634">Token resource/audience for this v1 design: https://ai.azure.com</text>
+  <text class="text" x="743" y="659">Role: Cognitive Services OpenAI User, on the model-hosting account.</text>
+  <text class="small" x="743" y="689">Policy selects the UAMI by client ID; role assignment uses its principal ID.</text>
+  <text class="small" x="743" y="709">No backend API key. No public endpoint fallback. Token failure fails the request.</text>
+
+  <rect x="24" y="741" width="1392" height="174" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text class="heading" x="43" y="770">Private DNS: keep normal HTTPS hostnames; resolve them to private endpoint IPs</text>
+
+  <rect x="43" y="789" width="241" height="57" rx="7" fill="#fff" stroke="#94a3b8"/>
+  <text class="label" x="59" y="813">Corporate DNS</text>
+  <text class="small" x="59" y="834">Conditional forwarding</text>
+  <path class="dns" d="M284 817 H479"/>
+  <text class="small" x="307" y="806">VPN / private peering</text>
+  <text class="small" x="317" y="841">UDP + TCP 53</text>
+
+  <rect x="482" y="789" width="321" height="57" rx="7" fill="#fff" stroke="#94a3b8"/>
+  <text class="label" x="498" y="813">Azure DNS Private Resolver</text>
+  <text class="small" x="498" y="834">Inbound endpoint: private IP</text>
+  <path class="dns" d="M803 817 H932"/>
+  <text class="small" x="819" y="806">Linked zones</text>
+
+  <rect x="935" y="789" width="454" height="77" rx="7" fill="#fff" stroke="#94a3b8"/>
+  <text class="mono" x="951" y="811">privatelink.azure-api.net</text>
+  <text class="mono" x="951" y="833">privatelink.openai.azure.com</text>
+  <text class="small" x="951" y="855">+ services.ai / cognitiveservices zones when required</text>
+
+  <text class="small" x="43" y="885">APIM's outbound DNS must resolve the same backend zones, directly or through its configured private resolver.</text>
+  <text class="small" x="43" y="905">Do not use raw IPs in HTTPS URLs, disable TLS verification, or let a public proxy resolve and originate the model request.</text>
+
+  <rect x="24" y="936" width="1392" height="166" rx="10" fill="#faf5ff" stroke="#c084fc"/>
+  <text class="heading purple" x="43" y="965">Separate control / identity dependencies: NOT privatized by the inference private endpoints</text>
+  <text class="label" x="43" y="996">Alteryx runtime</text>
+  <path class="control" d="M180 991 H242"/>
+  <text class="text" x="256" y="996">Alteryx One: sign-in, connections, licensing; Server uses an Alteryx One service principal.</text>
+  <text class="label" x="43" y="1024">APIM service</text>
+  <path class="control" d="M180 1019 H242"/>
+  <text class="text" x="256" y="1024">Azure managed identity / Entra: token issuance and refresh; required platform dependencies.</text>
+  <text class="small" x="43" y="1054">Dotted purple = logical service dependencies, not a claimed private endpoint path. No prompt/response payloads belong on these paths.</text>
+  <text class="small" x="43" y="1077">Classic internal-VNet alternative: replace APIM private endpoint with the internal VIP; enforce ingress by network controls, not PE context.</text>
+
+  <text class="small" x="28" y="1121">Architecture guidance only; not deployed or tested. A VPN has an encrypted internet underlay; use ExpressRoute private peering if that is disallowed.</text>
+</svg>
